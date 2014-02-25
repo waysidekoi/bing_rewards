@@ -37,21 +37,23 @@ submit = b.input type: "submit"
 submit.click
 
 # break on bad login/pass
-user_error = b.div id: "idTd_PWD_ErrorMsg_Username"
-pass_error = b.div id: "idTd_PWD_Error_Password"
+if b.alert.exists?
+  # get through dialog
+  b.alert.ok
 
-if user_error.present? || pass_error.present?
-  b.close
-  puts "Bad login/pass! Aborting"
-  abort
+  # update cookie
+  b.goto "bing.com"
+else
+  user_error = b.div id: "idTd_PWD_ErrorMsg_Username"
+  pass_error = b.div id: "idTd_PWD_Error_Password"
+
+  if user_error.present? || pass_error.present?
+    b.close
+    puts "Bad login/pass! Aborting"
+    abort
+  end
 end
 
-# allow popup to appear
-sleep(1)
-b.alert.exists? ? b.alert.ok : nil
-
-# update cookie
-b.goto "bing.com"
 
 # check if logged in
 retries = 0
