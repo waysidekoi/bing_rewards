@@ -15,11 +15,10 @@ This script will:
 
 ## Getting Started
 
-`gem install watir-webdriver`
+`$ gem install watir-webdriver`
 
 Replace `BING_USERNAME` with your login
 
 Replace `BING_PASSWORD` with your password
 
-Call run.rb in your terminal
-`ruby run.rb`
+`$ ruby run.rb`
