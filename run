@@ -57,15 +57,27 @@ end
 
 # check if logged in
 retries = 0
-el = b.span id: "id_rc"
-points_start = el.text
+user = b.span(id: "id_s").text
+@points_start = b.span(id: "id_rc").text
 
-while points_start == "0 of 5" && retries <= 5
-  retries++
-  sleep(5)
+until (user != "Sign in" && @points_start != "0 of 5") || retries >= 5
+  retries += 1
+  sleep(0.5)
   b.goto "bing.com"
-  el = b.span id: "id_rc"
-  points_start = el.text
+  user = b.span(id: "id_s").text
+  @points_start = b.span(id: "id_rc").text
+end
+
+def get_reward_links(browser)
+  # visit reward links for points
+  #
+  # source and click notification dropdown
+  dropdown = browser.span id: "bep_gleam"
+  dropdown.click
+
+  # grab notification title, ignore description
+  offers = browser.iframe(id: "bepfm").divs class: "offertitle"
+  links = offers.select { |x| x.text[/Earn.*credit$/] }
 end
 
 if retries == 5
@@ -73,10 +85,46 @@ if retries == 5
   puts "Unable to receive login from Bing after #{retries} attempts"
   abort
 else
-  # search 30x
+  links = get_reward_links(b)
+
+  #select clickable reward links
+  @points = []
+  i = 0
+
+  until links.empty? || i >= 5
+    i += 1
+    active_link = links.pop
+
+    # save points earned through click from title
+    @points << active_link.text[/\d/]
+
+    # click link
+    active_link.click
+    b.goto "bing.com"
+    links = get_reward_links(b)
+  end
+
+  # search 30x for points
+  #
   keywords.first(30).each do |key|
     b.goto "bing.com/search?q=#{key}"
   end
-  b.close
-  puts "Done!"
+end
+
+# report
+el = b.span id: "id_rc"
+points_end = el.text
+b.close
+
+puts <<-PARAGRAPH
+Results
+=======================
+Points at start: #{@points_start}
+Points now: #{points_end}
+
+PARAGRAPH
+if @points.any?
+  puts "Reward values earned: #{@points}\n"
+else
+  puts "No reward links found"
 end
