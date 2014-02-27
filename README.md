@@ -11,6 +11,7 @@ This script will:
 - auto log you in
 - generate 30 terms to query
 - auto search 30x
+- auto collect "Earn X credits" rewards when available
 - quit when finished
 
 ## Getting Started
