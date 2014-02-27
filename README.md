@@ -22,4 +22,4 @@ Replace `BING_USERNAME` with your login
 
 Replace `BING_PASSWORD` with your password
 
-`$ ruby run.rb`
+`$ ruby run`
