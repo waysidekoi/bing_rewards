@@ -1,130 +1,173 @@
 #!/usr/bin/env ruby
 require 'watir-webdriver'
 
-BING_USERNAME = ''
-BING_PASSWORD = ''
+class BingRewards
+  attr_reader :user, :pass, :queries, :b
 
-b = Watir::Browser.new :firefox
-
-# get top trends from google
-b.goto "http://www.google.com/trends/hottrends"
-
-# Load more results on the page
-1.times do
-  bb = b.div id: "more-link"
-  until bb.exists?
-    sleep(1)
-    bb = b.div id: "more-link"
+  def initialize(options)
+    @user = options[:user]
+    @pass = options[:pass]
+    @queries = options[:queries] || 30
+    @b    = Watir::Browser.new :firefox
   end
-  bb.click
-end
 
-# get keywords
-# DOM element: span 'hottrends-single-trend-title'
-s = b.spans class: "hottrends-single-trend-title"
-keywords = s.map { |span| span.text.gsub(/\s/,'+') }
+  def retrieve_search_terms
+    # get top trends from google
+    b.goto "http://www.google.com/trends/hottrends"
 
-# login
-b.goto "https://login.live.com/login.srf?wa=wsignin1.0&rpsnv=12&ct=1393221381&rver=6.0.5286.0&wp=MBI&wreply=http:%2F%2Fwww.bing.com%2FPassport.aspx%3Frequrl%3Dhttp%253a%252f%252fwww.bing.com%252f&lc=1033&id=264960"
+    # Load more results on the page
+    # approx 25 results per page
+    n = (queries / 25.0).ceil
 
-user = b.text_field id: "i0116"
-user.set BING_USERNAME
+    n.times do
+      bb = b.div id: "more-link"
+      until bb.exists?
+        sleep(1)
+        bb = b.div id: "more-link"
+      end
+      bb.click
+    end
 
-pass = b.text_field id: "i0118"
-pass.set BING_PASSWORD
+    # get keywords
+    # DOM element: span 'hottrends-single-trend-title'
+    s = b.spans class: "hottrends-single-trend-title"
+    s.map { |span| span.text.gsub(/\s/,'+') }
+  end
 
-submit = b.input type: "submit"
-submit.click
+  def go
+    login
+    visit_reward_links
+    run_search_queries
+    report
+  end
 
-# break on bad login/pass
-if b.alert.exists?
-  # get through dialog
-  b.alert.ok
+  def login
+    # login
+    b.goto "https://login.live.com/login.srf?wa=wsignin1.0&rpsnv=12&ct=1393221381&rver=6.0.5286.0&wp=MBI&wreply=http:%2F%2Fwww.bing.com%2FPassport.aspx%3Frequrl%3Dhttp%253a%252f%252fwww.bing.com%252f&lc=1033&id=264960"
 
-  # update cookie
-  b.goto "bing.com"
-else
-  user_error = b.div id: "idTd_PWD_ErrorMsg_Username"
-  pass_error = b.div id: "idTd_PWD_Error_Password"
+    b.text_field(id: "i0116").set(user)
+    b.text_field(id: "i0118").set(pass)
+    b.input(type: "submit").click
 
-  if user_error.present? || pass_error.present?
+    # break on bad login/pass
+    if b.alert.exists?
+      # get through dialog
+      b.alert.ok
+
+      # update cookie
+      b.goto "bing.com"
+    else
+      user_error = b.div id: "idTd_PWD_ErrorMsg_Username"
+      pass_error = b.div id: "idTd_PWD_Error_Password"
+
+      if user_error.present? || pass_error.present?
+        b.close
+        puts "Bad login/pass! Aborting"
+        abort
+      end
+    end
+
+    # check if logged in
+    retries = 0
+    user = b.span(id: "id_s").text
+    @points_start = b.span(id: "id_rc").text
+
+    until (user != "Sign in" && @points_start != "0 of 5") || retries >= 5
+      retries += 1
+      sleep(0.5)
+      b.goto "bing.com"
+      user = b.span(id: "id_s").text
+      @points_start = b.span(id: "id_rc").text
+    end
+
+    if retries == 5
+      b.close
+      puts "Unable to receive login from Bing after #{retries} attempts"
+      abort
+    end
+  end
+
+  def get_reward_links
+    # visit reward links for points
+    #
+    # source and click notification dropdown
+    b.span(id: "bep_gleam").click
+
+    # grab notification title, ignore description
+    offers = b.iframe(id: "bepfm").divs class: "offertitle"
+    links = offers.select { |x| x.text[/Earn.*credit.?$/] }
+  end
+
+  def visit_reward_links
+    links = get_reward_links
+
+    #select clickable reward links
+    @points = []
+    i = 0
+
+    until links.empty? || i >= 5
+      i += 1
+      active_link = links.pop
+
+      # save points earned through click from title
+      @points << active_link.text[/\d/]
+
+      # click link
+      active_link.click
+      b.goto "bing.com"
+      links = get_reward_links
+    end
+  end
+
+  def query_count
+    notifications = b.span(id: "bep_gleam")
+
+    notifications.click until notifications.exists?
+
+    offers = b.iframe(id: "bepfm").divs(class: "offertitle")
+    search_progress = offers.select { |x| x.text[/Search and Earn/] }
+    search_progress.first.text[/\d+/]
+  end
+
+  def run_search_queries
+    # return if query_count == "15"
+
+    terms = retrieve_search_terms
+
+    # search 30x for points
+    terms.first(queries).each do |key|
+      b.goto "bing.com/search?q=#{key}"
+    end
+  end
+
+  def report
+    # report
+    points_end = b.span(id: "id_rc").text
     b.close
-    puts "Bad login/pass! Aborting"
-    abort
-  end
-end
 
-
-# check if logged in
-retries = 0
-user = b.span(id: "id_s").text
-@points_start = b.span(id: "id_rc").text
-
-until (user != "Sign in" && @points_start != "0 of 5") || retries >= 5
-  retries += 1
-  sleep(0.5)
-  b.goto "bing.com"
-  user = b.span(id: "id_s").text
-  @points_start = b.span(id: "id_rc").text
-end
-
-def get_reward_links(browser)
-  # visit reward links for points
-  #
-  # source and click notification dropdown
-  dropdown = browser.span id: "bep_gleam"
-  dropdown.click
-
-  # grab notification title, ignore description
-  offers = browser.iframe(id: "bepfm").divs class: "offertitle"
-  links = offers.select { |x| x.text[/Earn.*credit.?$/] }
-end
-
-if retries == 5
-  b.close
-  puts "Unable to receive login from Bing after #{retries} attempts"
-  abort
-else
-  links = get_reward_links(b)
-
-  #select clickable reward links
-  @points = []
-  i = 0
-
-  until links.empty? || i >= 5
-    i += 1
-    active_link = links.pop
-
-    # save points earned through click from title
-    @points << active_link.text[/\d/]
-
-    # click link
-    active_link.click
-    b.goto "bing.com"
-    links = get_reward_links(b)
-  end
-
-  # search 30x for points
-  #
-  keywords.first(30).each do |key|
-    b.goto "bing.com/search?q=#{key}"
-  end
-end
-
-# report
-el = b.span id: "id_rc"
-points_end = el.text
-b.close
-
-puts <<-PARAGRAPH
-Results
+    puts <<-PARAGRAPH
+Results - #{user}
 =======================
 Points at start: #{@points_start}
 Points now: #{points_end}
 
 PARAGRAPH
-if @points.any?
-  puts "Reward values earned: #{@points}\n"
-else
-  puts "No reward links found"
+    if @points.any?
+      puts "Reward values earned: #{@points}\n"
+    else
+      puts "No reward links found"
+    end
+  end
+end
+
+logins = [
+  {
+    user: email account,
+    pass: password
+  }
+]
+
+logins.each do |cred|
+  bot = BingRewards.new(cred)
+  bot.go
 end
