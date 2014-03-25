@@ -18,8 +18,6 @@ This script will:
 
 `$ gem install watir-webdriver`
 
-Replace `BING_USERNAME` with your login
+Edit the `run` file and replace `BING_USERNAME` with your login and `BING_PASSWORD` with your password
 
-Replace `BING_PASSWORD` with your password
-
-`$ ruby run`
+Run the script in a terminal with `$ ruby run`
