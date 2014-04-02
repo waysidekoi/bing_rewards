@@ -2,16 +2,16 @@
 require 'watir-webdriver'
 
 class BingRewards
-  attr_reader :user, :pass, :queries, :b
+  attr_reader :user, :pass, :b
 
   def initialize(options)
     @user = options[:user]
     @pass = options[:pass]
-    @queries = options[:queries] || 30
+    @reward_points = []
     @b    = Watir::Browser.new :firefox
   end
 
-  def retrieve_search_terms
+  def retrieve_search_terms(queries)
     # get top trends from google
     b.goto "http://www.google.com/trends/hottrends"
 
@@ -37,8 +37,14 @@ class BingRewards
   def go
     login
     visit_reward_links
-    run_search_queries
-    report
+    count = get_query_count
+
+    if count.zero?
+      return
+    else
+      terms = retrieve_search_terms(count)
+      run_search_queries(terms, count)
+    end
   end
 
   def login
@@ -70,14 +76,15 @@ class BingRewards
     # check if logged in
     retries = 0
     user = b.span(id: "id_s").text
-    @points_start = b.span(id: "id_rc").text
+    points_el = b.span(id: "id_rc")
+    @points_start = points_el.exists? ? points_el.text : "0 of 5"
 
     until (user != "Sign in" && @points_start != "0 of 5") || retries >= 5
       retries += 1
-      sleep(0.5)
+      sleep((0.5+1)**retries)
       b.goto "bing.com"
       user = b.span(id: "id_s").text
-      @points_start = b.span(id: "id_rc").text
+      @points_start = points_el.text
     end
 
     if retries == 5
@@ -88,6 +95,7 @@ class BingRewards
   end
 
   def get_reward_links
+    b.goto "bing.com" unless b.url.match(/bing.com/)
     # visit reward links for points
     #
     # source and click notification dropdown
@@ -102,7 +110,6 @@ class BingRewards
     links = get_reward_links
 
     #select clickable reward links
-    @points = []
     i = 0
 
     until links.empty? || i >= 5
@@ -110,7 +117,7 @@ class BingRewards
       active_link = links.pop
 
       # save points earned through click from title
-      @points << active_link.text[/\d/]
+      @reward_points << active_link.text[/\d/]
 
       # click link
       active_link.click
@@ -119,41 +126,49 @@ class BingRewards
     end
   end
 
-  def query_count
-    notifications = b.span(id: "bep_gleam")
+  def get_query_stats
+    b.goto "bing.com" unless b.url.match(/bing.com$/)
+    b.span(id: "bep_gleam").click
 
-    notifications.click until notifications.exists?
-
-    offers = b.iframe(id: "bepfm").divs(class: "offertitle")
-    search_progress = offers.select { |x| x.text[/Search and Earn/] }
-    search_progress.first.text[/\d+/]
+    offers_text = b.iframe(id: "bepfm").divs(class: "text")
+    body = offers_text.select { |x| x.text[/Search and Earn/i] }.first.text.split("\n")
   end
 
-  def run_search_queries
-    # return if query_count == "15"
+  def get_query_count
+    query_stats = get_query_stats
 
-    terms = retrieve_search_terms
+    # query_stats[0] = "Search and Earn-30 of 30"
+    match = query_stats.first.match(/-(?<current>\d+).*of\s(?<max>\d+)/)
+    credits_remaining = match[:max].to_i - match[:current].to_i
 
+    # stats[1] = "Earn 1 credit per 3 Bing searches up to 30 credits a day."
+    rate = query_stats.last.match(/per\s(?<multiplier>\d).*to\s(?<max_earnable_credits>\d+)/)
+
+    credits_remaining * rate[:multiplier].to_i
+  end
+
+  def run_search_queries(terms, earnable_queries_count)
     # search 30x for points
-    terms.first(queries).each do |key|
+    terms.first(earnable_queries_count).each do |key|
       b.goto "bing.com/search?q=#{key}"
     end
   end
 
   def report
-    # report
+    b.goto "bing.com"
     points_end = b.span(id: "id_rc").text
     b.close
 
     puts <<-PARAGRAPH
+
 Results - #{user}
 =======================
 Points at start: #{@points_start}
-Points now: #{points_end}
+Points now: #{points_end} (+#{points_end.to_i - @points_start.to_i})
 
 PARAGRAPH
-    if @points.any?
-      puts "Reward values earned: #{@points}\n"
+    if @reward_points.any?
+      puts "Reward values earned: #{@reward_points}"
     else
       puts "No reward links found"
     end
@@ -162,12 +177,13 @@ end
 
 logins = [
   {
-    user: email account,
-    pass: password
+    user: '',
+    pass: '',
   }
 ]
 
 logins.each do |cred|
   bot = BingRewards.new(cred)
   bot.go
+  bot.report
 end
