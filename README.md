@@ -8,16 +8,18 @@ Bing's Reward program: http://www.bing.com/explore/rewards?PUBL=REFERAFRIEND&CRE
 So Bing will let you earn points in exchange for your exploring their new(?) page. This script assumes you have an account with Microsoft already to login with.
 
 This script will:
-- auto log you in
-- generate 30 terms to query
-- auto search 30x
+- auto log in
+- calc n queries based on max earnable daily search points
+- generate n terms to query
+- exit if already reached max
+- auto search
 - auto collect "Earn X credits" rewards when available
-- quit when finished
+- report when finished
 
 ## Getting Started
 
-`$ gem install watir-webdriver`
+`$ bundle install`
 
 Edit the `run` file and replace `BING_USERNAME` with your login and `BING_PASSWORD` with your password
 
-Run the script in a terminal with `$ ruby run`
+`$ ./run`

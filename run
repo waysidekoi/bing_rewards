@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 require 'watir-webdriver'
+require 'watir-scroll'
 
 class BingRewards
   attr_reader :user, :pass, :b
@@ -76,15 +77,14 @@ class BingRewards
     # check if logged in
     retries = 0
     user = b.span(id: "id_s").text
-    points_el = b.span(id: "id_rc")
-    @points_start = points_el.exists? ? points_el.text : "0 of 5"
+    @points_start = "0 of 5"
 
     until (user != "Sign in" && @points_start != "0 of 5") || retries >= 5
       retries += 1
       sleep((0.5+1)**retries)
       b.goto "bing.com"
       user = b.span(id: "id_s").text
-      @points_start = points_el.text
+      @points_start = b.span(id: "id_rc").text
     end
 
     if retries == 5
@@ -130,8 +130,13 @@ class BingRewards
     b.goto "bing.com" unless b.url.match(/bing.com$/)
     b.span(id: "bep_gleam").click
 
-    offers_text = b.iframe(id: "bepfm").divs(class: "text")
-    body = offers_text.select { |x| x.text[/Search and Earn/i] }.first.text.split("\n")
+    offers_el = b.iframe(id: "bepfm").divs(class: "text")
+
+    # bring all elements into scope and re-set offers_el
+    b.scroll.to offers_el.last
+    offers_el = b.iframe(id: "bepfm").divs(class: "text")
+
+    body = offers_el.select { |x| x.text[/Search and Earn/i] }.first.text.split("\n")
   end
 
   def get_query_count
@@ -151,6 +156,7 @@ class BingRewards
     # search 30x for points
     terms.first(earnable_queries_count).each do |key|
       b.goto "bing.com/search?q=#{key}"
+      sleep(0.25)
     end
   end
 
@@ -177,8 +183,8 @@ end
 
 logins = [
   {
-    user: '',
-    pass: '',
+    user: BING_USERNAME,
+    pass: BING_PASSWORD
   }
 ]
 
