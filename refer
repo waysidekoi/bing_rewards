@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+require 'json'
+require 'watir-webdriver'
+require 'watir-scroll'
+
+class Referrer
+  attr_reader :b
+
+  def initialize
+    @b = Watir::Browser.new :firefox
+  end
+
+  def setup_referral
+    b.goto "http://www.bing.com/explore/rewards?PUBL=REFERAFRIEND&CREA=RAW&rrid=_42d28ca0-cfe9-6924-c421-81d97e7fde47"
+
+    first_page
+    second_page
+    third_page
+
+    b.close
+  end
+
+  def first_page
+    link = b.link(text: "Try it now, FREE!")
+    link.exists? ? link.click : first_page
+  end
+
+  def second_page
+    cred = JSON.parse(File.read("accts.json")).pop
+    user = cred["user"]
+    pass = cred["pass"]
+
+    b.text_field(id: "i0116").when_present.set(user)
+    b.text_field(id: "i0118").when_present.set(pass)
+    b.input(type: "submit").click
+
+    if b.alert.exists?
+      b.alert.ok
+    end
+  end
+
+  def third_page
+    b.spans(class: "title").find{|x| x.text == "Get Bing Every Day"}.click
+    b.spans(class: "title").find{|x| x.text == "Start Exploring"}.click
+  end
+end
+
+b = Referrer.new
+b.setup_referral

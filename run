@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+require 'json'
 require 'watir-webdriver'
 require 'watir-scroll'
 
@@ -6,8 +7,8 @@ class BingRewards
   attr_reader :user, :pass, :b
 
   def initialize(options)
-    @user = options[:user]
-    @pass = options[:pass]
+    @user = options["user"]
+    @pass = options["pass"]
     @reward_points = []
     @b    = Watir::Browser.new :firefox
   end
@@ -136,32 +137,60 @@ class BingRewards
     b.scroll.to offers_el.last
     offers_el = b.iframe(id: "bepfm").divs(class: "text")
 
-    body = offers_el.select { |x| x.text[/Search and Earn/i] }.first.text.split("\n")
+    body = offers_el.select { |x| x.text[/Search and Earn/i] }.first
+
+    if body
+      stats = body.text.split("\n")
+
+      # "Search and Earn-30 of 30"
+      match = stats.first.match(/-(?<current>\d+).*of\s(?<max>\d+)/)
+
+      # "Earn 1 credit per 3 Bing searches up to 30 credits a day."
+      match2 = stats.last.match(/per\s(?<multiplier>\d)/)
+
+      # Hashit
+      hash = Hash[match.names.zip(match.captures)].merge(Hash[match2.names.zip(match2.captures)])
+      hash.inject({}) {|memo, (k, v)| memo[k.to_sym] = v.to_i; memo}
+    else
+      get_alt_query_stats
+    end
   end
 
+  def get_alt_query_stats
+    b.goto "http://www.bing.com/rewards/dashboard"
+
+    # "15 credits" (reached max) || "1 of 15 credits"
+    progress = b.divs(class: 'progress').last.text
+    match = progress.match(/^(?<current>\d+)/)
+
+    # "Earn 1 credit per 3 Bing searches up to 30 credits a day."
+    description = b.spans(class: 'desc').last.text
+    match2 = description.match(/per\s(?<multiplier>\d).*to\s(?<max>\d+)/)
+
+    # match2_hash = match2 ? Hash[match2.names.zip(match2.captures)] : Hash["multiplier", 3, "max", 60]
+
+    # Hashit
+    hash = Hash[match.names.zip(match.captures)].merge(Hash[match2.names.zip(match2.captures)])
+    hash.inject({}) {|memo, (k, v)| memo[k.to_sym] = v.to_i; memo}
+  end
+
+
   def get_query_count
-    query_stats = get_query_stats
-
-    # query_stats[0] = "Search and Earn-30 of 30"
-    match = query_stats.first.match(/-(?<current>\d+).*of\s(?<max>\d+)/)
-    credits_remaining = match[:max].to_i - match[:current].to_i
-
-    # stats[1] = "Earn 1 credit per 3 Bing searches up to 30 credits a day."
-    rate = query_stats.last.match(/per\s(?<multiplier>\d).*to\s(?<max_earnable_credits>\d+)/)
-
-    credits_remaining * rate[:multiplier].to_i
+    stats = get_alt_query_stats
+    (stats[:max] - stats[:current]) * stats[:multiplier]
   end
 
   def run_search_queries(terms, earnable_queries_count)
     # search 30x for points
+    count = 0
     terms.first(earnable_queries_count).each do |key|
       b.goto "bing.com/search?q=#{key}"
-      sleep(0.25)
+      count +=1
+      sleep(0.2)
     end
   end
 
   def report
-    b.goto "bing.com"
     points_end = b.span(id: "id_rc").text
     b.close
 
@@ -181,13 +210,7 @@ PARAGRAPH
   end
 end
 
-logins = [
-  {
-    user: BING_USERNAME,
-    pass: BING_PASSWORD
-  }
-]
-
+logins = JSON.parse(File.read("accts.json"))
 logins.each do |cred|
   bot = BingRewards.new(cred)
   bot.go
