@@ -2,6 +2,7 @@
 require 'json'
 require 'watir-webdriver'
 require 'watir-scroll'
+require 'webdriver-user-agent'
 
 class BingRewards
   attr_reader :user, :pass, :b
@@ -40,13 +41,45 @@ class BingRewards
     login
     visit_reward_links
     count = get_query_count
+    mobile_count = get_mobile_query_count
+
+    if !count.zero? || !mobile_count.zero?
+      terms = retrieve_search_terms([count, mobile_count].max)
+    end
 
     if count.zero?
-      return
+      false
     else
       terms = retrieve_search_terms(count)
       run_search_queries(terms, count)
     end
+
+    if mobile_count.zero?
+      false
+    else
+      # close desktop webdriver browser and start mobile webdriver browser
+      b.close
+      driver = Webdriver::UserAgent.driver(:browser => :firefox, :agent => :iphone, :orientation => :landscape) 
+      @b = Watir::Browser.new driver
+      login_mobile
+      terms ||= retrieve_search_terms(mobile_count)
+      run_search_queries(terms, mobile_count)
+    end
+  end
+
+  def login_mobile
+    b.goto "bing.com"
+    terms_popup = b.link(id:'bnp_close_link')
+    terms_popup.exists? ? terms_popup.click : nil
+    sleep 0.5
+
+    b.goto 'http://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&src=rewardssi&perms=&sig=98F6F74CA8EA4697A076CDA8715C402A&device=mobile&return_url=http%3a%2f%2fwww.bing.com%2frewards%2fsignin%3fru%3dhttp%253a%252f%252fwww.bing.com%252frewards%252fdashboard%26vt%3dSignin&Token=1'
+    b.text_field(id: "i0116").set(user)
+    b.text_field(id: "i0118").set(pass)
+    b.input(type: "submit").click
+
+    b.alert.ok if b.alert.exists?
+    sleep 0.5
   end
 
   def login
@@ -56,6 +89,7 @@ class BingRewards
     b.text_field(id: "i0116").set(user)
     b.text_field(id: "i0118").set(pass)
     b.input(type: "submit").click
+
 
     # break on bad login/pass
     if b.alert.exists?
@@ -100,7 +134,8 @@ class BingRewards
     # visit reward links for points
     #
     # source and click notification dropdown
-    b.span(id: "bep_gleam").click
+    # b.span(id: "bep_gleam").click
+    b.link(id: "bep").click
 
     # grab notification title, ignore description
     offers = b.iframe(id: "bepfm").divs class: "offertitle"
@@ -129,7 +164,9 @@ class BingRewards
 
   def get_query_stats
     b.goto "bing.com" unless b.url.match(/bing.com$/)
-    b.span(id: "bep_gleam").click
+    # b.span(id: "bep_gleam").click
+    b.link(id: "bep").click
+    # b.span(id: "bep_gleam").click
 
     offers_el = b.iframe(id: "bepfm").divs(class: "text")
 
@@ -156,6 +193,20 @@ class BingRewards
     end
   end
 
+  def get_mobile_query_stats
+    # "1 of 10 credits"
+    progress = b.link(id:'mobsrch01').div(class:'progress').text
+    match = progress.match(/^(?<current>\d+)/)
+
+    # "Earn 1 credit per 2 Bing mobile searches up to 10 credits a day."
+    description = b.link(id:'mobsrch01').span(class:'desc').text
+    match2 = description.match(/per\s(?<multiplier>\d).*to\s(?<max>\d+)/)
+
+    # Hashit
+    hash = Hash[match.names.zip(match.captures)].merge(Hash[match2.names.zip(match2.captures)])
+    hash.inject({}) {|memo, (k, v)| memo[k.to_sym] = v.to_i; memo}
+  end
+
   def get_alt_query_stats
     b.goto "http://www.bing.com/rewards/dashboard"
 
@@ -167,8 +218,6 @@ class BingRewards
     description = b.spans(class: 'desc').last.text
     match2 = description.match(/per\s(?<multiplier>\d).*to\s(?<max>\d+)/)
 
-    # match2_hash = match2 ? Hash[match2.names.zip(match2.captures)] : Hash["multiplier", 3, "max", 60]
-
     # Hashit
     hash = Hash[match.names.zip(match.captures)].merge(Hash[match2.names.zip(match2.captures)])
     hash.inject({}) {|memo, (k, v)| memo[k.to_sym] = v.to_i; memo}
@@ -177,6 +226,11 @@ class BingRewards
 
   def get_query_count
     stats = get_alt_query_stats
+    (stats[:max] - stats[:current]) * stats[:multiplier]
+  end
+
+  def get_mobile_query_count
+    stats = get_mobile_query_stats
     (stats[:max] - stats[:current]) * stats[:multiplier]
   end
 
@@ -191,7 +245,12 @@ class BingRewards
   end
 
   def report
-    points_end = b.span(id: "id_rc").text
+    b.goto "bing.com/rewards/dashboard"
+    mobile_points_total = b.div(class: "data-value-text")
+    desktop_points_total = b.span(id: "id_rc")
+
+    points_end = mobile_points_total.exists? ? mobile_points_total.text : desktop_points_total.text
+
     b.close
 
     puts <<-PARAGRAPH
