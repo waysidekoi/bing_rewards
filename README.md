@@ -20,8 +20,8 @@ This script will:
 
 `$ bundle install`
 
-Create a file called, `accts.json` and include an arrow of hashes for
-your username and password.  
+Create a file called, `accts.json` with an array of hashes for
+each username and password.  
 
 ``
 [
