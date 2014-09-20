@@ -26,7 +26,7 @@ class BingRewards
     n.times do
       bb = b.div id: "more-link"
       until bb.exists?
-        sleep(1)
+        sleep(1.5)
         bb = b.div id: "more-link"
       end
       bb.click
@@ -136,7 +136,7 @@ class BingRewards
     #
     # source and click notification dropdown
     # b.span(id: "bep_gleam").click
-    b.link(id: "bep").click
+    b.link(id: "id_rh").click
 
     # grab notification title, ignore description
     offers = b.iframe(id: "bepfm").divs class: "offertitle"
