@@ -12,7 +12,7 @@ This script will:
 - calc n queries based on max earnable daily search points
 - generate n terms to query
 - exit if already reached max
-- auto search
+- auto search, desktop and mobile
 - auto collect "Earn X credits" rewards when available
 - report when finished
 
@@ -20,6 +20,15 @@ This script will:
 
 `$ bundle install`
 
-Edit the `run` file and replace `BING_USERNAME` with your login and `BING_PASSWORD` with your password
+Create a file called, `accts.json` and include an arrow of hashes for
+your username and password.  
+
+``
+[
+  {"user":"USERNAME@DOMAIN.COM","pass":"PASSWORD"}
+]
+``
+
+Execute script
 
 `$ ./run`
