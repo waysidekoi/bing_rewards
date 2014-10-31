@@ -51,7 +51,7 @@ class BingRewards
     if count.zero?
       false
     else
-      terms = retrieve_search_terms(count)
+      terms ||= retrieve_search_terms(count)
       run_search_queries(terms, count)
     end
 
@@ -209,14 +209,15 @@ class BingRewards
   end
 
   def get_alt_query_stats
-    b.goto "http://www.bing.com/rewards/dashboard"
+    dashboard_url = "http://www.bing.com/rewards/dashboard"
+    b.goto dashboard_url unless b.url == dashboard_url
 
     # "15 credits" (reached max) || "1 of 15 credits"
-    progress = b.divs(class: 'progress').last.text
+    progress = b.lis.select{|x|x.text =~ /PC search/}.first.div(class:"progress").text
     match = progress.match(/^(?<current>\d+)/)
 
     # "Earn 1 credit per 3 Bing searches up to 30 credits a day."
-    description = b.spans(class: 'desc').last.text
+    description = b.lis.select{|x|x.text =~ /PC search/}.first.span(class:"desc").text
     match2 = description.match(/per\s(?<multiplier>\d).*to\s(?<max>\d+)/)
 
     # Hashit
