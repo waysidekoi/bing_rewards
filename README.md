@@ -1,7 +1,7 @@
 bing_rewards
 ============
 
-Edit: You win Bing. This time.
+*Edit: You win Bing. This time.*
 
 Script to earn maximum points for searching from Bing
 
