@@ -1,6 +1,8 @@
 bing_rewards
 ============
 
+Edit: You win Bing. This time.
+
 Script to earn maximum points for searching from Bing
 
 Bing's Reward program: http://www.bing.com/explore/rewards?PUBL=REFERAFRIEND&CREA=RAW&rrid=_42d28ca0-cfe9-6924-c421-81d97e7fde47
